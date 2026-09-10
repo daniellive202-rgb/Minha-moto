@@ -1,0 +1,80 @@
+<!doctype html><html lang="pt-BR"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111827"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icon.svg">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><title>Minha Moto</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#111827;background:#f3f4f6}*{box-sizing:border-box}body{margin:0;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+header{background:#111827;color:#fff;padding:22px 18px 20px;border-radius:0 0 22px 22px;position:relative}h1{margin:0;font-size:27px}.sub{opacity:.75;margin-top:5px}
+main{padding:14px 16px;max-width:680px;margin:auto}.tabs{display:flex;gap:5px;background:#fff;padding:6px;border-radius:15px;margin-bottom:14px;box-shadow:0 2px 10px #0000000b;position:sticky;top:0;z-index:10}
+.tab{margin:0;padding:11px 6px;background:transparent;color:#6b7280;border:0;font-size:13px;font-weight:700;border-radius:10px;flex:1}.tab.active{background:#111827;color:#fff}
+.card{background:#fff;border-radius:18px;padding:16px;margin-bottom:14px;box-shadow:0 2px 10px #0000000b}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat{background:#f9fafb;border-radius:14px;padding:14px}.label{font-size:12px;color:#6b7280}.value{font-size:23px;font-weight:700;margin-top:4px}
+label{display:block;font-size:13px;font-weight:600;margin:12px 0 6px}input,button{width:100%;padding:13px;border-radius:12px;border:1px solid #d1d5db;font-size:16px}
+button{border:0;background:#111827;color:#fff;font-weight:700;margin-top:10px}.secondary{background:#e5e7eb;color:#111827}.danger{background:#fee2e2;color:#991b1b}
+.status{padding:12px;border-radius:12px;background:#ecfdf5;color:#065f46;font-size:14px;margin-top:10px}.warning{background:#fff7ed;color:#9a3412}
+.row{display:flex;gap:8px}.row button{flex:1}.muted{color:#6b7280;font-size:13px}.hidden{display:none!important}.trip{border-top:1px solid #e5e7eb;padding:12px 0}.trip:first-child{border-top:0}
+#map{height:300px;border-radius:14px;overflow:hidden;background:#e5e7eb}
+.modal{display:none;position:fixed;inset:0;background:#0008;z-index:100;align-items:center;justify-content:center;padding:20px}.modal.show{display:flex}
+.modalBox{background:#fff;width:100%;max-width:420px;border-radius:22px;padding:22px}
+</style></head><body>
+<header><h1>🏍️ Minha Moto</h1><div class="sub">Controle de quilometragem e manutenção</div>
+<button onclick="location.reload()" style="position:absolute;right:16px;top:16px;width:44px;height:44px;padding:0;margin:0;border-radius:50%;font-size:22px;background:#374151">↻</button></header>
+
+<main>
+<nav class="tabs"><button class="tab active" onclick="showTab('monitor',this)">Monitoramento</button><button class="tab" onclick="showTab('config',this)">Configuração</button><button class="tab" onclick="showTab('history',this)">Histórico</button></nav>
+
+<section id="monitor" class="tabPanel">
+<div class="card"><h2>Quilometragem</h2><div class="grid">
+<div class="stat"><div class="label">Quilometragem atual</div><div class="value" id="current">0,0 km</div></div>
+<div class="stat"><div class="label">Próxima manutenção</div><div class="value" id="maintenance">—</div></div></div>
+<div class="stat" style="margin-top:10px"><div class="label">Faltam para manutenção</div><div class="value" id="remaining">—</div></div></div>
+
+<div class="card"><h2>Monitoramento GPS</h2><div id="gpsStatus" class="status warning">GPS parado. Toque em iniciar.</div>
+<div class="stat" style="margin-top:10px"><div class="label">Status do deslocamento</div><div class="value" id="movementStatus">Parado</div></div>
+<div class="row"><button onclick="startTracking()">Iniciar viagem</button><button class="secondary" onclick="stopTracking()">Parar</button></div>
+<div id="live" class="hidden" style="margin-top:12px"><div class="grid">
+<div class="stat"><div class="label">Distância desta viagem</div><div class="value" id="tripDistance">0,0 km</div></div>
+<div class="stat"><div class="label">Pontos GPS</div><div class="value" id="points">0</div></div></div>
+<div class="stat" style="margin-top:10px"><div class="label">Quilometragem durante a viagem</div><div class="value" id="liveOdo">0,0 km</div></div>
+<button onclick="finishTrip()">Finalizar viagem</button></div></div>
+
+<div class="card"><h2>Trajeto</h2><div id="map"></div><div id="mapHint" class="muted" style="margin-top:8px">O mapa aparecerá quando houver pontos GPS registrados.</div></div>
+</section>
+
+<section id="config" class="tabPanel hidden"><div class="card"><h2>Configuração da moto</h2>
+<label>Quilometragem atual da moto</label><input id="odo" type="number" inputmode="decimal" step="0.1" placeholder="Ex.: 25430">
+<label>Quilometragem da próxima manutenção</label><input id="maint" type="number" inputmode="decimal" step="0.1" placeholder="Ex.: 30000">
+<button onclick="saveSettings()">Salvar configuração</button></div></section>
+
+<section id="history" class="tabPanel hidden"><div class="card"><h2>Histórico de deslocamentos</h2>
+<div id="historyList"><div class="muted">Nenhuma viagem registrada.</div></div><button class="danger" onclick="clearHistory()">Apagar histórico</button></div></section>
+</main>
+
+<div id="confirmModal" class="modal"><div class="modalBox"><h2>🏍️ Deslocamento concluído</h2><p id="confirmText"></p><p><strong>Você estava utilizando a moto?</strong></p><div class="row"><button onclick="answerTrip(true)">Sim</button><button class="secondary" onclick="answerTrip(false)">Não</button></div></div></div>
+<div id="editModal" class="modal"><div class="modalBox"><h2>Alterar registro</h2><p>Você estava utilizando a moto neste deslocamento?</p><div class="row"><button onclick="answerEdit(true)">Sim</button><button class="secondary" onclick="answerEdit(false)">Não</button></div></div></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>
+const KEY="motoKmV1";let data=JSON.parse(localStorage.getItem(KEY)||'{"odo":0,"maint":0,"trips":[]}');
+let watchId=null,last=null,total=0,points=0,path=[],moving=false,stationaryCount=0,pendingTrip=null,map=null,routeLine=null,editingIndex=null;
+const fmt=n=>Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1});
+function save(){localStorage.setItem(KEY,JSON.stringify(data));render()}
+function showTab(id,btn){document.querySelectorAll(".tabPanel").forEach(x=>x.classList.add("hidden"));document.getElementById(id).classList.remove("hidden");document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));btn.classList.add("active");if(id==="monitor"&&map)setTimeout(()=>map.invalidateSize(),50);scrollTo(0,0)}
+function render(){document.getElementById("current").textContent=fmt(data.odo)+" km";document.getElementById("maintenance").textContent=data.maint?fmt(data.maint)+" km":"—";document.getElementById("remaining").textContent=data.maint?Math.max(0,data.maint-data.odo).toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1})+" km":"—";document.getElementById("odo").value=data.odo||"";document.getElementById("maint").value=data.maint||"";document.getElementById("historyList").innerHTML=data.trips.length?data.trips.slice().reverse().map(t=>'<div class="trip"><b>'+new Date(t.date).toLocaleString("pt-BR")+'</b><div>'+t.from+' → '+t.to+'</div><div><strong>'+fmt(t.distance)+' km</strong> · Moto: '+(t.motorcycle?"Sim":"Não")+'</div><div class="muted">'+(t.confirmed?"Quilometragem adicionada":"Deslocamento ignorado, mantido no histórico")+'</div><button class="secondary" onclick="toggleMotorcycle('+data.trips.indexOf(t)+')">Alterar: Moto = '+(t.motorcycle?"Sim":"Não")+'</button></div>').join(""):'<div class="muted">Nenhuma viagem registrada.</div>'}
+function saveSettings(){let o=parseFloat(document.getElementById("odo").value),m=parseFloat(document.getElementById("maint").value);if(!Number.isFinite(o)||o<0)return alert("Informe uma quilometragem válida.");data.odo=o;data.maint=Number.isFinite(m)&&m>0?m:0;save();checkMaintenance()}
+function checkMaintenance(){if(data.maint&&data.odo>=data.maint&&"Notification"in window){if(Notification.permission==="granted")new Notification("🏍️ Manutenção da moto",{body:"A moto atingiu "+fmt(data.odo)+" km."});else if(Notification.permission==="default")Notification.requestPermission()}}
+function initMap(){if(!window.L||map)return;map=L.map("map").setView([-23.5505,-46.6333],12);L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(map);routeLine=L.polyline([]).addTo(map)}
+function updateMap(){if(!map)return;let pts=path.map(x=>[x.lat,x.lon]);routeLine.setLatLngs(pts);if(pts.length>1){map.fitBounds(routeLine.getBounds(),{padding:[20,20],maxZoom:16});document.getElementById("mapHint").textContent="Trajeto GPS em tempo real."}}
+function saveActive(){if(points)localStorage.setItem(KEY+"_active",JSON.stringify({total,points,path,last,moving,stationaryCount}))}
+function restoreActive(){try{let a=JSON.parse(localStorage.getItem(KEY+"_active")||"null");if(!a||!a.points)return;total=a.total||0;points=a.points||0;path=a.path||[];last=a.last||null;moving=!!a.moving;stationaryCount=a.stationaryCount||0;document.getElementById("live").classList.remove("hidden");document.getElementById("tripDistance").textContent=fmt(total)+" km";document.getElementById("liveOdo").textContent=fmt(data.odo+total)+" km";document.getElementById("points").textContent=points;document.getElementById("movementStatus").textContent=moving?"Andando":"Parado";document.getElementById("gpsStatus").textContent="Viagem recuperada. Toque em Iniciar para continuar.";updateMap()}catch(e){}}
+function startTracking(){if(!navigator.geolocation)return alert("Este navegador não oferece GPS.");if(!last&&!points){total=0;points=0;path=[];moving=false;stationaryCount=0}initMap();watchId=navigator.geolocation.watchPosition(onPos,onErr,{enableHighAccuracy:true,maximumAge:3000,timeout:15000});document.getElementById("live").classList.remove("hidden");document.getElementById("liveOdo").textContent=fmt(data.odo+total)+" km";document.getElementById("gpsStatus").textContent="GPS ativo. Percorra o trajeto normalmente.";document.getElementById("gpsStatus").className="status"}
+function onPos(pos){let acc=Number(pos.coords.accuracy||999),sp=Number(pos.coords.speed),p={lat:pos.coords.latitude,lon:pos.coords.longitude,acc,speed:Number.isFinite(sp)?sp:0,time:pos.timestamp};points++;path.push(p);if(last){let d=haversine(last.lat,last.lon,p.lat,p.lon),dt=Math.max(.1,(p.time-last.time)/1000),calc=d*1000/dt,usable=acc<=60&&last.acc<=60,evidence=(Number.isFinite(sp)&&sp>=1.5)||calc>=1.5;if(usable&&evidence){moving=true;stationaryCount=0;if(d<=.5)total+=d}else{stationaryCount++;if(stationaryCount>=3)moving=false}}last=p;document.getElementById("tripDistance").textContent=fmt(total)+" km";document.getElementById("liveOdo").textContent=fmt(data.odo+total)+" km";document.getElementById("points").textContent=points;document.getElementById("movementStatus").textContent=moving?"Andando":"Parado";saveActive();updateMap()}
+function onErr(e){document.getElementById("gpsStatus").textContent="GPS: "+e.message;document.getElementById("gpsStatus").className="status warning"}
+function haversine(a,b,c,d){let R=6371,r=Math.PI/180,x=(c-a)*r,y=(d-b)*r,q=Math.sin(x/2)**2+Math.cos(a*r)*Math.cos(c*r)*Math.sin(y/2)**2;return 2*R*Math.asin(Math.sqrt(q))}
+function stopTracking(){if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null}saveActive();moving=false;document.getElementById("movementStatus").textContent="Parado";document.getElementById("gpsStatus").textContent="GPS parado."}
+function finishTrip(){stopTracking();if(total<=.01)return alert("Nenhuma distância significativa foi registrada.");pendingTrip={distance:total,points};document.getElementById("confirmText").textContent="Foram aproximadamente "+fmt(total)+" km.";document.getElementById("confirmModal").classList.add("show")}
+function answerTrip(moto){if(!pendingTrip)return;data.trips.push({date:new Date().toISOString(),distance:pendingTrip.distance,motorcycle:moto,confirmed:moto,from:"Local inicial",to:"Local final",points:pendingTrip.points});if(moto)data.odo+=pendingTrip.distance;pendingTrip=null;localStorage.removeItem(KEY+"_active");document.getElementById("confirmModal").classList.remove("show");total=0;points=0;path=[];last=null;moving=false;stationaryCount=0;document.getElementById("movementStatus").textContent="Parado";save();checkMaintenance();updateMap()}
+function toggleMotorcycle(i){editingIndex=i;document.getElementById("editModal").classList.add("show")}
+function answerEdit(next){if(editingIndex===null)return;let t=data.trips[editingIndex],old=!!t.motorcycle;if(next!==old){if(next)data.odo+=Number(t.distance||0);else if(old)data.odo=Math.max(0,data.odo-Number(t.distance||0));t.motorcycle=next;t.confirmed=next;save();checkMaintenance()}editingIndex=null;document.getElementById("editModal").classList.remove("show")}
+function clearHistory(){if(confirm("Apagar todo o histórico?")){data.trips=[];save()}}
+render();initMap();restoreActive();updateMap();checkMaintenance();
+</script></body></html>
